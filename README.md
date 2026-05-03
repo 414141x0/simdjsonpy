@@ -4,8 +4,10 @@ Typed Python 3.14+ bindings for [simdjson](https://simdjson.org) using [nanobind
 
 ## Installation
 
+Install directly from GitHub with [`uv`](https://docs.astral.sh/uv/):
+
 ```bash
-pip install .
+uv pip install git+https://github.com/414141x0/simdjsonpy.git
 ```
 
 Requires Python >= 3.14 and a C++20 compiler.
