@@ -1,0 +1,38 @@
+# Python bytecode and import caches
+__pycache__/
+*.py[cod]
+
+# Local virtual environments
+.venv/
+.python-version
+
+# Build and packaging artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Test, coverage, and static-analysis state
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.tox/
+.nox/
+
+# Generated documentation output
+site/
+
+# Local benchmark and fuzzing artifacts
+benchmarks/results/
+fuzz/artifacts/
+fuzz/corpus/
+fuzz/crashes/
+fuzz/minimized/
+
+# OS/editor noise
+.DS_Store

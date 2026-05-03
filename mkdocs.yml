@@ -1,0 +1,15 @@
+site_name: simdjsonpy
+site_description: Python bindings for simdjson
+theme:
+  name: mkdocs
+nav:
+  - Overview: index.md
+  - Quickstart: quickstart.md
+  - Benchmarks: benchmarks.md
+  - Security & Fuzzing: security.md
+  - Development: development.md
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true

@@ -1,0 +1,25 @@
+[project]
+name = "simdjsonpy"
+version = "0.1.0"
+description = "Python 3.14 bindings for simdjson built using nanobind"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = []
+
+[build-system]
+requires = ["scikit-build-core>=0.10"]
+build-backend = "scikit_build_core.build"
+
+[dependency-groups]
+docs = [
+  "mkdocs>=1.6,<2",
+]
+bench = [
+  "pysimdjson>=7,<8",
+]
+fuzz = [
+  "hypothesis>=6.152,<7",
+]
+
+[tool.scikit-build]
+wheel.packages = ["simdjsonpy"]
