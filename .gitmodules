@@ -1,0 +1,6 @@
+[submodule "ext/nanobind"]
+	path = ext/nanobind
+	url = https://github.com/wjakob/nanobind
+[submodule "ext/simdjson"]
+	path = ext/simdjson
+	url = https://github.com/simdjson/simdjson
