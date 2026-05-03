@@ -361,14 +361,17 @@ dom_document_wrapper::dom_document_wrapper()
     : state(std::make_shared<dom_document_state>()) {}
 
 dom_element_wrapper dom_document_wrapper::root() const {
+  nb::ft_lock_guard guard(state->mutex);
   return wrap_element(state, state->document.root());
 }
 
 size_t dom_document_wrapper::capacity() const noexcept {
+  nb::ft_lock_guard guard(state->mutex);
   return state->document.capacity();
 }
 
 std::string dom_document_wrapper::dump_raw_tape() const {
+  nb::ft_lock_guard guard(state->mutex);
   std::ostringstream stream;
   if (!state->document.dump_raw_tape(stream)) {
     throw simdjson_runtime_error(simdjson::TAPE_ERROR,
@@ -622,10 +625,12 @@ dom_element_wrapper dom_stream_element_wrapper::element_view() const {
 }
 
 size_t dom_document_stream_wrapper::size_in_bytes() const noexcept {
+  nb::ft_lock_guard guard(state->mutex);
   return state->stream.size_in_bytes();
 }
 
 size_t dom_document_stream_wrapper::truncated_bytes() const noexcept {
+  nb::ft_lock_guard guard(state->mutex);
   return state->stream.truncated_bytes();
 }
 

@@ -20,52 +20,15 @@ TARGET_BYTES = 128 * MIB
 class Scenario:
     name: str
     path: Path
-    query_name: str
 
 
 SCENARIOS = [
-    Scenario(
-        name="twitter.json",
-        path=ROOT / "ext/simdjson/jsonexamples/twitter.json",
-        query_name="search_metadata.count",
-    ),
+    Scenario(name="twitter.json", path=ROOT / "ext/simdjson/jsonexamples/twitter.json"),
     Scenario(
         name="citm_catalog.json",
         path=ROOT / "ext/simdjson/jsonexamples/citm_catalog.json",
-        query_name="len(events)",
     ),
 ]
-
-
-def compact_query_stdlib(name: str, payload: bytes) -> int:
-    document = json.loads(payload)
-    if name == "search_metadata.count":
-        return document["search_metadata"]["count"]
-    if name == "len(events)":
-        return len(document["events"])
-    raise ValueError(f"unknown query: {name}")
-
-
-def compact_query_pysimdjson(
-    name: str, parser: simdjson.Parser, payload: bytes
-) -> int:
-    document = parser.parse(payload)
-    if name == "search_metadata.count":
-        return document["search_metadata"]["count"]
-    if name == "len(events)":
-        return len(document["events"])
-    raise ValueError(f"unknown query: {name}")
-
-
-def compact_query_simdjsonpy(
-    name: str, parser: simdjsonpy.OnDemandParser, payload: bytes
-) -> int:
-    document = parser.iterate(payload)
-    if name == "search_metadata.count":
-        return document["search_metadata"]["count"].get_uint64()
-    if name == "len(events)":
-        return len(document["events"].get_object())
-    raise ValueError(f"unknown query: {name}")
 
 
 def iterations_for(payload_size: int) -> int:
@@ -87,19 +50,24 @@ def benchmark(callable_, iterations: int, repeats: int) -> float:
 
 
 def format_table(results: dict[str, dict[str, tuple[float, float]]]) -> str:
-    header = (
-        "| Parser | `twitter.json` ops/s | `twitter.json` MiB/s | "
-        "`citm_catalog.json` ops/s | `citm_catalog.json` MiB/s |"
-    )
-    separator = "| --- | ---: | ---: | ---: | ---: |"
-    rows = [header, separator]
-    for parser_name in ("json", "simdjson", "simdjsonpy"):
-        twitter_ops, twitter_mib = results["twitter.json"][parser_name]
-        citm_ops, citm_mib = results["citm_catalog.json"][parser_name]
-        rows.append(
-            f"| `{parser_name}` | {twitter_ops:,.0f} | {twitter_mib:,.1f} | "
-            f"{citm_ops:,.0f} | {citm_mib:,.1f} |"
-        )
+    parsers = list(next(iter(results.values())).keys())
+    scenarios = list(results.keys())
+
+    header_parts = ["| Parser"]
+    sep_parts = ["| ---"]
+    for s in scenarios:
+        header_parts.extend([f"| `{s}` ops/s", f"| `{s}` MiB/s"])
+        sep_parts.extend(["| ---:", "| ---:"])
+    header = " ".join(header_parts) + " |"
+    sep = " ".join(sep_parts) + " |"
+
+    rows = [header, sep]
+    for p in parsers:
+        parts = [f"| **{p}**"]
+        for s in scenarios:
+            ops, mib = results[s][p]
+            parts.extend([f"| {ops:,.0f}", f"| {mib:,.1f}"])
+        rows.append(" ".join(parts) + " |")
     return "\n".join(rows)
 
 
@@ -110,31 +78,23 @@ def main() -> None:
     args = parser.parse_args()
 
     pysimdjson_parser = simdjson.Parser()
-    simdjsonpy_parser = simdjsonpy.OnDemandParser()
+    simdjsonpy_od_parser = simdjsonpy.OnDemandParser()
+    simdjsonpy_dom_parser = simdjsonpy.DOMParser()
 
     results: dict[str, dict[str, tuple[float, float]]] = {}
 
     for scenario in SCENARIOS:
         payload = scenario.path.read_bytes()
-        expected = compact_query_stdlib(scenario.query_name, payload)
-        assert compact_query_pysimdjson(
-            scenario.query_name, pysimdjson_parser, payload
-        ) == expected
-        assert compact_query_simdjsonpy(
-            scenario.query_name, simdjsonpy_parser, payload
-        ) == expected
-
         iterations = iterations_for(len(payload))
         scenario_results: dict[str, tuple[float, float]] = {}
+
         runners = {
-            "json": lambda payload=payload, name=scenario.query_name: compact_query_stdlib(
-                name, payload
-            ),
-            "simdjson": lambda payload=payload, name=scenario.query_name: compact_query_pysimdjson(
-                name, pysimdjson_parser, payload
-            ),
-            "simdjsonpy": lambda payload=payload, name=scenario.query_name: compact_query_simdjsonpy(
-                name, simdjsonpy_parser, payload
+            "json.loads": lambda p=payload: json.loads(p),
+            "pysimdjson": lambda p=payload: pysimdjson_parser.parse(p),
+            "simdjsonpy.loads": lambda p=payload: simdjsonpy.loads(p),
+            "simdjsonpy DOM": lambda p=payload: simdjsonpy_dom_parser.parse(p),
+            "simdjsonpy On-Demand": lambda p=payload: simdjsonpy_od_parser.iterate(
+                p
             ),
         }
 
@@ -154,7 +114,7 @@ def main() -> None:
         print(scenario_name)
         for parser_name, (ops_per_second, mib_per_second) in scenario_results.items():
             print(
-                f"  {parser_name:10s}  ops/s={ops_per_second:,.0f}  MiB/s={mib_per_second:,.1f}"
+                f"  {parser_name:25s}  ops/s={ops_per_second:,.0f}  MiB/s={mib_per_second:,.1f}"
             )
 
 

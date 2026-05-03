@@ -1239,10 +1239,12 @@ void ondemand_parser_wrapper::set_threaded(bool threaded) noexcept {
 }
 
 size_t ondemand_document_stream_wrapper::size_in_bytes() const noexcept {
+  nb::ft_lock_guard guard(state->mutex);
   return state->stream.size_in_bytes();
 }
 
 size_t ondemand_document_stream_wrapper::truncated_bytes() const noexcept {
+  nb::ft_lock_guard guard(state->mutex);
   return state->stream.truncated_bytes();
 }
 

@@ -42,6 +42,7 @@ from ._core import (
     error_name,
     is_fatal,
     is_valid,
+    loads,
     minify,
     set_active_implementation,
     validate_utf8,
@@ -94,6 +95,12 @@ def iterate_many(
     )
 
 
+def dumps(obj, /, **kwargs) -> str:
+    """Serialize a Python object to a JSON string. Delegates to json.dumps."""
+    import json
+    return json.dumps(obj, **kwargs)
+
+
 __all__ = [
     "DEFAULT_MAX_DEPTH",
     "DOMArray",
@@ -128,6 +135,7 @@ __all__ = [
     "available_implementations",
     "builtin_implementation",
     "dom",
+    "dumps",
     "error_message",
     "error_name",
     "is_fatal",
@@ -135,6 +143,7 @@ __all__ = [
     "iterate",
     "iterate_many",
     "load",
+    "loads",
     "minify",
     "ondemand",
     "parse",

@@ -32,12 +32,6 @@ borrowed_bytes::borrowed_bytes(nb::handle handle) {
     return;
   }
 
-  if (PyByteArray_Check(object)) {
-    data_ = PyByteArray_AsString(object);
-    size_ = static_cast<size_t>(PyByteArray_GET_SIZE(object));
-    return;
-  }
-
   if (PyObject_GetBuffer(object, &buffer_, PyBUF_CONTIG_RO) == 0) {
     has_buffer_ = true;
     data_ = static_cast<const char *>(buffer_.buf);
@@ -321,6 +315,78 @@ simdjson::dom::element_type dom_element_type(simdjson::dom::element element) {
   return element.type();
 }
 
+namespace {
+
+nb::object dom_to_python(simdjson::dom::element element) {
+  switch (element.type()) {
+    case simdjson::dom::element_type::ARRAY: {
+      auto arr = element.get_array().value_unsafe();
+      Py_ssize_t len = static_cast<Py_ssize_t>(arr.size());
+      PyObject *raw = PyList_New(len);
+      if (!raw) throw nb::python_error();
+      nb::object list = nb::steal(raw);
+      Py_ssize_t i = 0;
+      for (auto child : arr) {
+        PyList_SET_ITEM(raw, i++, dom_to_python(child).release().ptr());
+      }
+      return list;
+    }
+    case simdjson::dom::element_type::OBJECT: {
+      auto obj = element.get_object().value_unsafe();
+      PyObject *raw = PyDict_New();
+      if (!raw) throw nb::python_error();
+      nb::object dict = nb::steal(raw);
+      for (auto field : obj) {
+        PyObject *raw_key = PyUnicode_FromStringAndSize(
+            field.key.data(), static_cast<Py_ssize_t>(field.key.size()));
+        if (!raw_key) throw nb::python_error();
+        nb::object key = nb::steal(raw_key);
+        nb::object value = dom_to_python(field.value);
+        if (PyDict_SetItem(raw, key.ptr(), value.ptr()) < 0)
+          throw nb::python_error();
+      }
+      return dict;
+    }
+    case simdjson::dom::element_type::INT64: {
+      PyObject *obj = PyLong_FromLongLong(element.get_int64().value_unsafe());
+      if (!obj) throw nb::python_error();
+      return nb::steal(obj);
+    }
+    case simdjson::dom::element_type::UINT64: {
+      PyObject *obj =
+          PyLong_FromUnsignedLongLong(element.get_uint64().value_unsafe());
+      if (!obj) throw nb::python_error();
+      return nb::steal(obj);
+    }
+    case simdjson::dom::element_type::DOUBLE: {
+      PyObject *obj = PyFloat_FromDouble(element.get_double().value_unsafe());
+      if (!obj) throw nb::python_error();
+      return nb::steal(obj);
+    }
+    case simdjson::dom::element_type::STRING: {
+      auto sv = element.get_string().value_unsafe();
+      PyObject *obj = PyUnicode_FromStringAndSize(
+          sv.data(), static_cast<Py_ssize_t>(sv.size()));
+      if (!obj) throw nb::python_error();
+      return nb::steal(obj);
+    }
+    case simdjson::dom::element_type::BOOL:
+      return nb::borrow(element.get_bool().value_unsafe() ? Py_True : Py_False);
+    case simdjson::dom::element_type::NULL_VALUE:
+      return nb::none();
+    case simdjson::dom::element_type::BIGINT: {
+      auto sv = element.get_bigint().value_unsafe();
+      std::string str(sv);
+      PyObject *obj = PyLong_FromString(str.c_str(), nullptr, 10);
+      if (!obj) throw nb::python_error();
+      return nb::steal(obj);
+    }
+  }
+  return nb::none();
+}
+
+}  // namespace
+
 void bind_common(nb::module_ &m) {
   m.attr("__version__") = "0.1.0";
   m.attr("SIMDJSON_PADDING") = nb::int_(simdjson::SIMDJSON_PADDING);
@@ -508,6 +574,30 @@ void bind_common(nb::module_ &m) {
           simdjson::get_active_implementation() = implementation;
         },
         "name"_a);
+  m.def(
+      "loads",
+      [](nb::handle handle) -> nb::object {
+        static thread_local simdjson::dom::parser parser;
+        simdjson::dom::element root;
+        if (nb::isinstance<padded_string_wrapper>(handle)) {
+          const auto &ps = nb::cast<const padded_string_wrapper &>(handle);
+          auto result =
+              with_gil_released([&] { return parser.parse(ps.value()); });
+          ensure_success(result.error(), "loads");
+          root = result.value_unsafe();
+        } else {
+          borrowed_bytes bytes(handle);
+          auto result = with_gil_released([&] {
+            return parser.parse(
+                reinterpret_cast<const uint8_t *>(bytes.view().data()),
+                bytes.view().size(), true);
+          });
+          ensure_success(result.error(), "loads");
+          root = result.value_unsafe();
+        }
+        return dom_to_python(root);
+      },
+      "data"_a);
 }
 
 }  // namespace simdjsonpy
