@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Pythonic DOM wrappers over the native simdjson DOM bindings."""
+"""Python DOM wrappers over the simdjson DOM bindings."""
 
 from typing import TypeAlias
 

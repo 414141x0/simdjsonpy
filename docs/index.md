@@ -1,69 +1,57 @@
 # simdjsonpy
 
-`simdjsonpy` is a Python 3.14 binding for `simdjson` with two explicit surfaces:
+Python 3.14+ bindings for [simdjson](https://simdjson.org), built with [nanobind](https://github.com/wjakob/nanobind) for free-threaded interpreters.
 
-- DOM for stable, reusable document views
-- On-Demand for lower-overhead query-style access
+There are three ways to read JSON, ordered from most ergonomic to fastest:
 
-The repository offers:
+| API | Returns | When to use |
+| --- | --- | --- |
+| [`loads`](loads.md) | Native Python `dict`/`list`/etc. | Drop-in replacement for `json.loads`. |
+| [`DOM`](dom.md) | Wrapper objects over a parsed tape. | Random access, JSON Pointer queries, repeated traversal. |
+| [`On-Demand`](ondemand.md) | Lazy cursor over the bytes. | Extracting a few fields from large documents. |
 
-- clear lifetime semantics
-- free-threaded-friendly locking around shared parser state
-- fuzz and sanitizer guidance for the binding layer
+Streaming variants for NDJSON and concatenated documents live in [Streaming](streaming.md). Shared utilities — `PaddedString`, `validate_utf8`, `minify`, implementation switching — are in [Common helpers](common.md).
 
-## Package Shape
+## Install
 
-Top-level helpers:
-
-```python
-import simdjsonpy as simdjson
-
-doc = simdjson.parse(b'{"name":"Ada"}')
-fast = simdjson.iterate(b'{"ok":true}')
+```bash
+uv pip install git+https://github.com/414141x0/simdjsonpy.git
 ```
 
-DOM module:
+A C++20 compiler is required to build the native module.
+
+## Hello world
 
 ```python
-from simdjsonpy import dom
+import simdjsonpy
 
-document = dom.parse('{"users":[{"id":1},{"id":2}]}')
-users = document["users"].get_array()
-assert users[0]["id"].get_int64() == 1
+data = simdjsonpy.loads('{"name": "Ada", "ok": true, "scores": [98, 100]}')
+# {'name': 'Ada', 'ok': True, 'scores': [98, 100]}
 ```
 
-On-Demand module:
+For maximum throughput, skip the dict materialization:
 
 ```python
-from simdjsonpy import ondemand
-
-document = ondemand.iterate('{"flag":true,"items":[1,2,3]}')
-assert document["flag"].get_bool() is True
-assert len(document["items"].get_array()) == 3
+parser = simdjsonpy.OnDemandParser()
+doc = parser.iterate('{"name": "Ada", "ok": true, "scores": [98, 100]}')
+doc["name"].get_string()              # 'Ada'
+doc["scores"].get_array().at(0).get_uint64()  # 98
 ```
 
-## Lifetime Rules
+## Free-threaded Python
 
-### DOM
+All parser objects guard their internal state with per-instance locks. 
+`loads` uses a thread-local DOM parser to avoid contention entirely. 
 
-- `DOMParser.parse()` and `DOMParser.parse_into()` produce owned `DOMDocument` instances.
-- Reusing a parser does not invalidate previously returned `DOMDocument` objects.
-- `DOMDocumentStream` is forward-only.
-- A streamed item stays valid until the next item is requested from the same iterator.
-- Accessing an older streamed item after advancing raises `ReferenceError`.
+See [Threading](threading.md) for the model and worked examples.
 
-### On-Demand
+## Performance
 
-- `OnDemandParser.iterate()` creates an owned document state per parse.
-- The underlying parser is constructed in its final stable location before parsing.
-- Top-level conveniences such as `document["key"]` rewind the root document before lookup.
-- Lower-level object and value methods still follow simdjson's forward-only semantics.
-- `OnDemandDocumentStream` is forward-only.
-- A streamed document reference stays valid until the next item is requested from the same iterator.
-- Accessing an older streamed document after advancing raises `ReferenceError`.
+```text
+twitter.json         json.loads          315 ops/s    189 MiB/s
+                     simdjsonpy.loads    669 ops/s    403 MiB/s   (2x)
+                     simdjsonpy DOM    4,528 ops/s  2,727 MiB/s  (14x)
+                     simdjsonpy OD     8,242 ops/s  4,964 MiB/s  (26x)
+```
 
-## Fast Paths
-
-- Use `PaddedString` when you already know the payload will be parsed more than once or you want an owned padded buffer.
-- Use DOM when you need long-lived random access.
-- Use On-Demand when your workload is query-oriented and you do not want to materialize more than you consume.
+Full numbers and methodology: [Benchmarks](benchmarks.md).

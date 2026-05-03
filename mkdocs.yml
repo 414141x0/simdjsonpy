@@ -2,9 +2,19 @@ site_name: simdjsonpy
 site_description: Python bindings for simdjson
 theme:
   name: mkdocs
+exclude_docs: |
+  README.md
 nav:
   - Overview: index.md
   - Quickstart: quickstart.md
+  - API:
+      - loads / dumps: loads.md
+      - DOM: dom.md
+      - On-Demand: ondemand.md
+      - Streaming: streaming.md
+      - Common helpers: common.md
+  - Error handling: error-handling.md
+  - Threading: threading.md
   - Benchmarks: benchmarks.md
   - Security & Fuzzing: security.md
   - Development: development.md
